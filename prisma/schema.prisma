@@ -1,0 +1,359 @@
+// SkillTree database schema
+// PostgreSQL via Prisma 7 (prisma-client generator + pg driver adapter)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Connection URL lives in prisma.config.ts (Prisma 7) and is passed to the
+  // client at runtime via the pg driver adapter — see src/lib/db.ts
+}
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+
+enum LearningStyle {
+  VISUAL
+  AUDITORY
+  READING
+  KINESTHETIC
+  MIXED
+}
+
+model User {
+  id        String @id @default(cuid())
+  // Clerk is the source of truth for identity; we mirror the minimum needed.
+  clerkId   String @unique
+  email     String @unique
+  name      String?
+  imageUrl  String?
+
+  // App-level profile
+  learningGoals     String?       @db.Text
+  currentSkills     String?       @db.Text
+  learningStyle     LearningStyle @default(MIXED)
+  dailyGoalMinutes  Int           @default(30)
+  weeklyTargetHours Int           @default(5)
+  timezone          String        @default("UTC")
+
+  // Gamification
+  xp               Int       @default(0)
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastActivityDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills       Skill[]
+  resources    Resource[]
+  notes        Note[]
+  flashcards   Flashcard[]
+  reviews      Review[]
+  sessions     LearningSession[]
+  projects     Project[]
+  journal      JournalEntry[]
+  achievements UserAchievement[]
+  goals        Goal[]
+  aiUsage      AiUsage[]
+}
+
+// ---------------------------------------------------------------------------
+// Skills (hierarchical tree)
+// ---------------------------------------------------------------------------
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model Skill {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      Skill?     @relation("SkillTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Skill[]    @relation("SkillTree")
+  name        String
+  description String?    @db.Text
+  category    String?
+  difficulty  Difficulty @default(BEGINNER)
+  progress    Int        @default(0) // 0-100
+  xp          Int        @default(0)
+  color       String     @default("#8b5cf6")
+  position    Int        @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  resources  Resource[]
+  notes      Note[]
+  flashcards Flashcard[]
+  sessions   LearningSession[]
+  projects   Project[]         @relation("ProjectSkills")
+
+  @@index([userId])
+  @@index([parentId])
+}
+
+// ---------------------------------------------------------------------------
+// Learning resources
+// ---------------------------------------------------------------------------
+
+enum ResourceType {
+  BOOK
+  VIDEO
+  COURSE
+  ARTICLE
+  PDF
+  PODCAST
+  PROJECT
+  CERTIFICATION
+  OTHER
+}
+
+enum ResourceStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  MASTERED
+}
+
+model Resource {
+  id               String         @id @default(cuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId          String?
+  skill            Skill?         @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  title            String
+  type             ResourceType   @default(OTHER)
+  url              String?
+  author           String?
+  category         String?
+  difficulty       Difficulty     @default(BEGINNER)
+  status           ResourceStatus @default(NOT_STARTED)
+  difficultyRating Int? // 1-5
+  qualityRating    Int? // 1-5
+  notes            String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  flashcards Flashcard[]
+  sessions   LearningSession[]
+
+  @@index([userId])
+  @@index([skillId])
+}
+
+// ---------------------------------------------------------------------------
+// Notes (markdown, tags, wiki-links)
+// ---------------------------------------------------------------------------
+
+model Note {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId String?
+  skill   Skill?   @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  title   String
+  content String   @default("") @db.Text
+  tags    String[] @default([])
+
+  linksTo   Note[] @relation("NoteLinks")
+  linksFrom Note[] @relation("NoteLinks")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  flashcards Flashcard[]
+
+  @@index([userId])
+  @@index([skillId])
+}
+
+// ---------------------------------------------------------------------------
+// Spaced repetition (SM-2)
+// ---------------------------------------------------------------------------
+
+enum ReviewGrade {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Flashcard {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId    String?
+  skill      Skill?    @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  resourceId String?
+  resource   Resource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  noteId     String?
+  note       Note?     @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  front String @db.Text
+  back  String @db.Text
+
+  // SM-2 state
+  easeFactor   Float    @default(2.5)
+  intervalDays Int      @default(0)
+  repetitions  Int      @default(0)
+  lapses       Int      @default(0)
+  dueAt        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviews Review[]
+
+  @@index([userId, dueAt])
+  @@index([skillId])
+}
+
+model Review {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcardId String
+  flashcard   Flashcard   @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  grade       ReviewGrade
+  reviewedAt  DateTime    @default(now())
+
+  @@index([userId, reviewedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Learning sessions (time tracking → dashboard, heatmap, streaks)
+// ---------------------------------------------------------------------------
+
+model LearningSession {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId    String?
+  skill      Skill?    @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  resourceId String?
+  resource   Resource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  minutes    Int
+  note       String?
+  date       DateTime  @default(now())
+
+  @@index([userId, date])
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(PLANNED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks    ProjectTask[]
+  skills   Skill[]           @relation("ProjectSkills")
+  sessions LearningSession[]
+
+  @@index([userId])
+}
+
+model ProjectTask {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  done      Boolean @default(false)
+  position  Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// Journal
+// ---------------------------------------------------------------------------
+
+model JournalEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime @db.Date
+  learned    String?  @db.Text
+  difficult  String?  @db.Text
+  questions  String?  @db.Text
+  confidence Int      @default(3) // 1-5
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// ---------------------------------------------------------------------------
+// Gamification & goals
+// ---------------------------------------------------------------------------
+
+model UserAchievement {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code       String // definition lives in src/lib/achievements.ts
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, code])
+  @@index([userId])
+}
+
+model Goal {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?   @db.Text
+  targetDate  DateTime?
+  done        Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// AI usage metering (per-day quota enforcement)
+// ---------------------------------------------------------------------------
+
+model AiUsage {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    DateTime @db.Date
+  count  Int      @default(0)
+
+  @@unique([userId, day])
+}
