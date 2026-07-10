@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dark-first design tokens. Light mode overrides the runtime vars below. */
+  --color-bg: #0a0a0f;
+  --color-surface: #13131c;
+  --color-surface-2: #1a1a27;
+  --color-border: #26263a;
+  --color-text: #ededf4;
+  --color-muted: #8f8fa3;
+  --color-accent: #8b5cf6;
+  --color-accent-strong: #5227ff;
+  --color-accent-soft: #b497cf;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  --font-sans: "Avenir Next", "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+
+  --radius-card: 1rem;
+}
+
+/* Light mode: flip the runtime variables the utilities reference. */
+:root.light {
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f1f6;
+  --color-border: #e4e4ee;
+  --color-text: #17171f;
+  --color-muted: #6b6b7e;
+}
+
+html {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+/* Thin scrollbars that match the theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* Rendered markdown (notes, AI answers) — output of our sanitized renderer */
+.prose-st {
+  line-height: 1.7;
+  font-size: 0.925rem;
+}
+.prose-st h1, .prose-st h2, .prose-st h3 {
+  font-family: var(--font-display);
+  margin: 1.1em 0 0.4em;
+  line-height: 1.25;
+}
+.prose-st h1 { font-size: 1.5rem; }
+.prose-st h2 { font-size: 1.25rem; }
+.prose-st h3 { font-size: 1.1rem; }
+.prose-st p { margin: 0.55em 0; }
+.prose-st ul { margin: 0.55em 0; padding-left: 1.4em; list-style: disc; }
+.prose-st li { margin: 0.2em 0; }
+.prose-st blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 0.9em;
+  color: var(--color-muted);
+  margin: 0.7em 0;
+}
+.prose-st code {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.prose-st pre {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.9em 1em;
+  overflow-x: auto;
+  margin: 0.7em 0;
+}
+.prose-st pre code { background: none; border: none; padding: 0; }
+.prose-st a { color: var(--color-accent); text-decoration: underline; }
+.prose-st .wikilink {
+  color: var(--color-accent-soft);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border-radius: 4px;
+  padding: 0 0.25em;
+  cursor: pointer;
+}
+
+@keyframes st-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: st-fade-up 0.5s ease both; }
